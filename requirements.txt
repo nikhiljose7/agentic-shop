@@ -2,4 +2,3 @@ fastapi
 uvicorn[standard]
 google-genai
 python-dotenv
-SQLAlchemy>=1.4

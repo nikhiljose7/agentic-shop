@@ -8,6 +8,7 @@ from google import genai
 from google.genai import types
 from dotenv import load_dotenv
 import os
+import re
 
 # Import tools registry
 from tools import TOOLS
@@ -29,10 +30,13 @@ MODEL = "gemini-2.5-flash-lite"
 
 SYSTEM_INSTRUCTION = (
     "You are a professional and friendly AI E-commerce Assistant. "
-    "The system will automatically provide you with the logically authenticated User ID in the System Context. "
-    "If the user is logged in, you will be given their name, greet them EXACTLY via 'hi [user name] can i help you today'. "
-    "If the user is NOT logged in, NEVER ask them to provide their User ID. Simply call the required tool right away anyway. "
-    "Do NOT ask the user to provide their ID."
+    "You have access to tools to help users with orders, coupons, account details, and platform questions. "
+    "IMPORTANT: Never assume or invent any user details. "
+    "Always call check_login_status first before attempting to access any personal data. "
+    "User identity, name, email, and order information must only come from tool results — never from conversation context. "
+    "If a tool returns an error saying the user is not logged in, tell the user they must log in using the button on the top right. "
+    "Do NOT ask the user to provide their User ID — the system handles authentication silently. "
+    "For general platform questions about registration, cancellation, shipping, or coupons, use search_faq — no login required."
 )
 
 # Build a lookup map: function name -> function object
@@ -129,16 +133,14 @@ async def chat(message: Message):
 
     history = sessions.get(session_id, [])
 
-    # If user is logged in, inform the system exactly who it is ONLY if we haven't already
+    # Minimal session signal: if user is logged in, signal it without exposing details
     current_contents = []
-    already_informed = any("System Context: The user is currently logged in" in getattr(p, "text", "") for msg in history for p in msg.parts if msg.role == "user")
-    
-    if message.user_id and not already_informed:
+    if message.user_id:
         current_contents.append(
-            types.Content(role="user", parts=[types.Part(text=f"System Context: The user is currently logged in. Their name is {message.user_name} and their User ID is {message.user_id}. Proceed to help them.")])
+            types.Content(role="user", parts=[types.Part(text="System: A verified user session is active. Use tools to retrieve any user-specific information.")])
         )
         current_contents.append(
-            types.Content(role="model", parts=[types.Part(text=f"Understood. I will assist {message.user_name} securely using their logically verified session.")])
+            types.Content(role="model", parts=[types.Part(text="Understood. I will use the appropriate tools to retrieve user information securely.")])
         )
 
     # Start with current history + user input. Inject current login state AFTER history to override old chat context!
@@ -146,49 +148,12 @@ async def chat(message: Message):
         types.Content(role="user", parts=[types.Part(text=user_text)])
     ]
 
-    # Server-side automatic order lookup: if the user message contains an
-    # explicit order id (simple numeric pattern) and the requester is logged
-    # in, perform a safe server-side tool call and append the result as a
-    # `tool` content so the model can reference authorized data.
-    try:
-        import re
-        order_match = re.search(r"\b\d{4,6}\b", user_text)
-        if order_match and message.user_id:
-            order_id = order_match.group(0)
-            import database as db
-            order = db.orders.get(order_id)
-            if order:
-                if order.get("user_id") == message.user_id:
-                    # Choose status vs details heuristically
-                    fn_name = "get_order_status" if "status" in user_text.lower() else "get_order_details"
-                    fn = TOOL_MAP.get(fn_name)
-                    if fn:
-                        try:
-                            server_result = fn(order_id=order_id)
-                        except Exception as e:
-                            server_result = f"Error during server-side lookup: {str(e)}"
-                    else:
-                        server_result = f"Error: Tool '{fn_name}' not available."
 
-                    # Immediately return the server-side result for authorized
-                    # requests so the user sees the factual order information
-                    # without relying on the model to synthesize it.
-                    from typing import List
-                    history_entries: List[HistoryEntry] = [HistoryEntry(role="model", text=str(server_result))]
-                    return ChatResponse(reply=str(server_result), history=history_entries, requires_auth=False)
-                else:
-                    # Order exists but belongs to a different user — append
-                    # an authorized denial so the model can't leak other users' data.
-                    err = f"Error: You do not have permission to access order #{order_id}."
-                    tool_part = types.Part(function_response=types.FunctionResponse(name="get_order_status", response={"result": err}))
-                    contents.append(types.Content(role="tool", parts=[tool_part]))
-    except Exception:
-        pass
 
     try:
         # Determine if any prior tool responses in the session already provided
         # authorized order data (so the model can safely reference it).
-        order_tools = {"get_order_status", "get_order_details", "cancel_order", "update_order_address", "update_order_quantity"}
+        order_tools = {"get_order_status", "get_order_details", "get_order_history", "cancel_order", "update_order_address", "update_order_quantity"}
         authorized_order_data_retrieved = False
         for msg in contents:
             if getattr(msg, "role", None) == "tool":
@@ -271,7 +236,7 @@ async def chat(message: Message):
                                 ))
                                 continue
                                 
-                    if fn_name in ["get_user_details", "get_user_coupons"]:
+                    if fn_name in ["get_user_details", "get_user_coupons", "get_order_history", "check_login_status"]:
                         fn_args["user_id"] = message.user_id
                         
                     fn      = TOOL_MAP.get(fn_name)
@@ -287,7 +252,7 @@ async def chat(message: Message):
                     # If an order-related tool returned a non-error string, mark it as
                     # authorized data retrieved so the model is allowed to mention
                     # order information in subsequent replies.
-                    order_tools = {"get_order_status", "get_order_details", "cancel_order", "update_order_address", "update_order_quantity"}
+                    order_tools = {"get_order_status", "get_order_details", "get_order_history", "cancel_order", "update_order_address", "update_order_quantity"}
                     if fn_name in order_tools:
                         try:
                             result_text = str(result)
@@ -319,7 +284,6 @@ async def chat(message: Message):
             # is allowed to answer FAQ knowledge without login, but must not
             # invent or reveal order details. If the reply contains sensitive
             # order-related keywords and no `user_id` is present, require login.
-            import re
             sensitive_re = re.compile(r"\b(order|order\s+#|order\s+id|order\s+status|tracking|shipment|shipped|delivered|invoice|purchase)\b", re.I)
             if (not message.user_id) and sensitive_re.search(reply or ""):
                 return ChatResponse(

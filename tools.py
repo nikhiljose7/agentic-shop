@@ -33,11 +33,13 @@ def calculator(expression: str) -> str:
 from ecommerce_tools import (
     # User
     register_user,
+    check_login_status,
     get_user_details,
     
     # Order
     get_order_status,
     get_order_details,
+    get_order_history,
     cancel_order,
     update_order_address,
     update_order_quantity,
@@ -59,12 +61,13 @@ TOOLS = [
 
     # User management
     register_user,
+    check_login_status,
     get_user_details,
-    
 
     # Order management
     get_order_status,
     get_order_details,
+    get_order_history,
     cancel_order,
     update_order_address,
     update_order_quantity,

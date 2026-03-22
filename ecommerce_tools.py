@@ -226,6 +226,38 @@ def update_order_quantity(order_id: str, item_id: str, quantity: int) -> str:
     return f"Error: No item with item_id '{item_id}' found in order #{order_id}."
 
 
+def get_order_history(**kwargs) -> str:
+    """
+    Get all orders for the currently logged-in user with their status and delivery date.
+    Use this when a user asks 'show my orders', 'what are my orders',
+    'show my order history', 'what have I ordered', or asks about delivery
+    dates without providing a specific order ID.
+    Returns a summary list of all orders belonging to the user.
+    """
+    user_id = kwargs.get("user_id")
+    if not user_id or user_id not in db.users:
+        return "Error: Could not retrieve order history for your session."
+
+    user_name = db.users[user_id]["name"]
+    user_orders = [
+        (oid, o) for oid, o in db.orders.items()
+        if o["user_id"] == user_id
+    ]
+
+    if not user_orders:
+        return f"You have no orders yet, {user_name}."
+
+    result = f"Order history for {user_name}:\n"
+    for oid, order in user_orders:
+        result += (
+            f"\n• Order #{oid}"
+            f"\n  - Status: {order['status']}"
+            f"\n  - Expected Delivery: {order['delivery_date']}"
+            f"\n  - Address: {order['address']}"
+        )
+    return result.strip()
+
+
 # ════════════════════════════════════════════════════════════
 #  COUPON FUNCTIONS
 # ════════════════════════════════════════════════════════════
@@ -303,20 +335,63 @@ def get_user_coupons(**kwargs) -> str:
 
 def search_faq(query: str) -> str:
     """
-    Search our knowledge base for answers to common platform questions.
-    Use this for questions about how to register, cancel orders, apply coupons, 
-    shipping times, return policies, or other general usage questions.
+    Search the knowledge base for answers to common platform questions.
+    Use this for questions about how to register, cancel orders, apply coupons,
+    shipping times, return policies, payment methods, privacy, or any general
+    platform usage question that does not require account-specific data.
     """
-    query = query.lower()
+    query_lower = query.lower()
+
+    KEYWORD_MAP = {
+        "registration": [
+            "register", "sign up", "signup", "create account", "new account",
+            "join", "how to register", "how do i register"
+        ],
+        "cancellation": [
+            "cancel", "cancellation", "how to cancel", "stop order",
+            "undo order", "reverse order"
+        ],
+        "coupons": [
+            "coupon", "promo", "discount", "voucher", "code", "apply coupon",
+            "promotional", "offer", "deal"
+        ],
+        "shipping": [
+            "shipping", "delivery time", "how long", "when will",
+            "estimated delivery", "dispatch", "days"
+        ],
+        "returns": [
+            "return", "refund", "send back", "exchange", "unworn",
+            "return policy", "how to return"
+        ],
+        "payment": [
+            "payment", "pay", "credit card", "debit card", "wallet",
+            "how to pay", "accepted payments", "methods"
+        ],
+        "privacy": [
+            "privacy", "data", "personal information", "secure", "security",
+            "gdpr", "my data", "information stored"
+        ],
+    }
+
     matches = []
-    
-    # Simple keyword-based RAG simulation
-    for key, content in db.faqs.items():
-        if key in query or any(word in content.lower() for word in query.split()):
-            matches.append(content)
-            
+    seen_keys = set()
+
+    for faq_key, keywords in KEYWORD_MAP.items():
+        if faq_key in seen_keys:
+            continue
+        for keyword in keywords:
+            if keyword in query_lower:
+                if faq_key in db.faqs:
+                    matches.append(db.faqs[faq_key])
+                    seen_keys.add(faq_key)
+                break
+
     if not matches:
-        return "I'm sorry, I couldn't find a specific answer in our FAQs. Would you like me to connect you with a human support agent?"
-        
-    return "Here is information from our knowledge base:\n" + "\n\n".join(matches)
+        return (
+            "I'm sorry, I couldn't find a specific answer in our knowledge base. "
+            "You can ask me about registration, order cancellation, coupons, "
+            "shipping times, returns, payment methods, or account privacy."
+        )
+
+    return "Here is information from our knowledge base:\n\n" + "\n\n".join(matches)
 
