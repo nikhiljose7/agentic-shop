@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E-commerce Assistant</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-left">
+                <div class="status-indicator"></div>
+                <h1 class="app-title">Assistant</h1>
+            </div>
+            <div class="header-right">
+                <div class="status-text">
+                    <span class="status-dot"></span>
+                    Online
+                </div>
+                <!-- Auth Buttons -->
+                <button type="button" class="auth-control-btn" id="headerLoginBtn">Login</button>
+                <button type="button" class="auth-control-btn" id="headerLogoutBtn" style="display: none;">Logout</button>
+                
+                <button class="icon-button" id="clearBtn" title="Clear Chat">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 6h18"></path>
+                        <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                        <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Chat Area -->
+        <main class="chat-container" id="chatContainer">
+            <div class="chat-content" id="chatContent">
+                <!-- Messages will be injected here -->
+                <div class="message-wrapper bot">
+                    <div class="avatar bot-avatar">A</div>
+                    <div class="message bot-message">
+                        👋 Hi there! I'm your E-commerce Assistant. How can I help you today?
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Input Area -->
+        <div class="input-container">
+            <button class="scroll-bottom-btn" id="scrollBottomBtn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 5v14"></path>
+                    <path d="m19 12-7 7-7-7"></path>
+                </svg>
+            </button>
+            <form class="input-form" id="chatForm">
+                <input type="text" id="userInput" placeholder="Message Assistant..." autocomplete="off">
+                <button type="submit" id="sendBtn" class="send-btn" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="white" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Auth Modal -->
+    <div id="authModal" class="modal-overlay">
+        <div class="modal-content">
+            <h2 id="authTitle">Welcome Back</h2>
+            <p id="authSubtitle">Please sign in to continue</p>
+            
+            <form id="authForm" class="auth-form">
+                <!-- Signup fields (hidden by default) -->
+                <div id="signupFields" style="display: none;">
+                    <div class="form-group">
+                        <label for="authName">Name</label>
+                        <input type="text" id="authName" placeholder="Enter your name">
+                    </div>
+                    <div class="form-group">
+                        <label for="authAddress">Address</label>
+                        <input type="text" id="authAddress" placeholder="Enter your delivery address">
+                    </div>
+                </div>
+
+                <!-- Email field (always visible) -->
+                <div class="form-group">
+                    <label for="authEmail">Email</label>
+                    <input type="email" id="authEmail" placeholder="Enter your email" required>
+                </div>
+
+                <div id="authError" class="auth-error"></div>
+
+                <button type="submit" id="authSubmitBtn" class="auth-btn">Sign In</button>
+            </form>
+
+            <div class="auth-toggle">
+                <span id="authToggleText">Don't have an account?</span>
+                <button type="button" id="authToggleBtn" class="auth-link">Sign up</button>
+            </div>
+        </div>
+    </div>
+    
+    
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="/static/script.js"></script>
+</body>
+</html>
